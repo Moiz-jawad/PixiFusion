@@ -1,0 +1,23 @@
+{
+  "name": "pdf-Xchange",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "pdf-merger-js": "^5.1.2"
+  },
+  "devDependencies": {
+    "@types/multer": "^2.0.0"
+  }
+}
