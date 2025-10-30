@@ -1,8 +1,3 @@
-// removeBg.js
-import "dotenv/config";
-import fetch from "node-fetch";
-import fs from "fs-extra";
-
 /**
  * Removes background using Replicate API (AI-based)
  * @param {string} inputPath - Local path of the image to process
