@@ -4,16 +4,59 @@ import path from "path";
 import fs from "fs-extra";
 import PDFMerger from "pdf-merger-js";
 import sharp from "sharp";
+import dotenv from "dotenv";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { fileURLToPath } from "url";
 import { removeBackgroundAI } from "./removeBg.js";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 🧩 Multer setup
-const upload = multer({ dest: "uploads/" });
+// 🔐 Security middleware
+app.use(helmet());
+
+// ⏱️ Basic rate limiting (per IP)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+});
+
+app.use("/", apiLimiter);
+
+// 🧩 Multer setups with size/type limits
+const pdfUpload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20 MB per file
+    files: 10,
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === "application/pdf") cb(null, true);
+    else cb(new Error("Only PDF files are allowed"));
+  },
+});
+
+const imageUpload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB per image
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    if (
+      ["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(
+        file.mimetype
+      )
+    )
+      cb(null, true);
+    else cb(new Error("Only image files (png, jpg, jpeg, webp) are allowed"));
+  },
+});
 
 // 🗂 Serve static files
 app.use(express.static(path.join(__dirname, "public")));
@@ -29,7 +72,7 @@ app.get("/", (req, res) => {
 });
 
 // 🧾 Merge PDFs
-app.post("/merge", upload.array("pdfs", 10), async (req, res) => {
+app.post("/merge", pdfUpload.array("pdfs", 10), async (req, res) => {
   try {
     if (!req.files || req.files.length < 2) {
       return res.status(400).json({ error: "Upload at least 2 PDFs" });
@@ -43,7 +86,11 @@ app.post("/merge", upload.array("pdfs", 10), async (req, res) => {
 
     await merger.save(outputPath);
 
-    req.files.forEach((f) => fs.unlinkSync(f.path)); // cleanup
+    // Async cleanup of temp PDF uploads
+    await Promise.all(
+      req.files.map((f) => fs.remove(f.path).catch(() => {}))
+    );
+
     res.json({ downloadUrl: `/output/pdfs/${outputName}` });
   } catch (err) {
     console.error("PDF merge error:", err);
@@ -52,7 +99,7 @@ app.post("/merge", upload.array("pdfs", 10), async (req, res) => {
 });
 
 // 🖼 Enhance Image
-app.post("/enhance-image", upload.single("image"), async (req, res) => {
+app.post("/enhance-image", imageUpload.single("image"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
@@ -77,7 +124,7 @@ app.post("/enhance-image", upload.single("image"), async (req, res) => {
 
 // 🪄 Remove Background (local version)
 
-app.post("/remove-bg", upload.single("image"), async (req, res) => {
+app.post("/remove-bg", imageUpload.single("image"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
