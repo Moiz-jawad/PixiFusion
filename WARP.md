@@ -50,7 +50,9 @@ If you introduce testing or linting, add the corresponding scripts to `package.j
 
 ### Environment variables / .env
 
-- `removeBg.js` expects `process.env.REPLICATE_API_TOKEN` to be set. Without it, background removal will throw an error.
+- `REPLICATE_API_TOKEN` – required. Used by `removeBg.js` to authenticate with the Replicate API. Without it, background removal will fail.
+- `PORT` – optional. Port for the HTTP server (defaults to `3000`).
+- `NODE_ENV` – optional. Can be used to tune logging/behavior if you add environment-specific logic.
 - `upscale.js` calls `dotenv.config()`, so environment variables are typically supplied via a `.env` file in the project root.
 - `merge.js` writes merged PDFs to `process.env.TEMP` (or `./uploads` as a fallback) when used directly.
 
@@ -79,11 +81,11 @@ If you introduce testing or linting, add the corresponding scripts to `package.j
 ### Background removal: `removeBg.js`
 
 - Exports `removeBackgroundAI(inputPath, outputPath)` which:
-  - Reads the input image, sends it to the Replicate API (`cjwbw/rembg` model) using a base64 data URL.
-  - Polls the prediction endpoint until completion or failure.
-  - Downloads the processed image from the returned URL and writes it to `outputPath`.
+  - Uses the official `replicate` Node.js client with the `cjwbw/rembg` model (version ID configured in `config/replicateConfig.js`).
+  - Streams the uploaded image from disk into the Replicate prediction.
+  - Receives a file-like output from Replicate and writes it directly to `outputPath`.
 - Depends on `REPLICATE_API_TOKEN` for authentication.
-- Internally uses file I/O and HTTP requests; if you modify this file, ensure required imports (`fs`, `fetch` or an HTTP client, etc.) are present and compatible with Node ESM.
+- If you modify this file, keep the `Replicate` client usage and model identifier in sync with any changes you make to Replicate configuration.
 
 ### Image upscaling & enhancement: `upscale.js`
 

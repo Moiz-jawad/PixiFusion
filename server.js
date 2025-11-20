@@ -24,6 +24,16 @@ app.use(
   })
 );
 
+// Small helper to safely remove temporary files without crashing the app
+async function safeRemove(filePath) {
+  if (!filePath) return;
+  try {
+    await fs.remove(filePath);
+  } catch (err) {
+    console.error("Failed to remove temp file", filePath, err);
+  }
+}
+
 // ⏱️ Basic rate limiting (per IP)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -77,35 +87,37 @@ app.get("/", (req, res) => {
 
 // 🧾 Merge PDFs
 app.post("/merge", pdfUpload.array("pdfs", 10), async (req, res) => {
+  const files = req.files || [];
   try {
-    if (!req.files || req.files.length < 2) {
+    if (!files.length || files.length < 2) {
       return res.status(400).json({ error: "Upload at least 2 PDFs" });
     }
 
     const merger = new PDFMerger();
-    for (const file of req.files) await merger.add(file.path);
+    for (const file of files) await merger.add(file.path);
 
     const outputName = `merged-${Date.now()}.pdf`;
     const outputPath = path.join(__dirname, "output/pdfs", outputName);
 
     await merger.save(outputPath);
 
-    // Async cleanup of temp PDF uploads
-    await Promise.all(req.files.map((f) => fs.remove(f.path).catch(() => {})));
-
     res.json({ downloadUrl: `/output/pdfs/${outputName}` });
   } catch (err) {
     console.error("PDF merge error:", err);
     res.status(500).json({ error: "Failed to merge PDFs" });
+  } finally {
+    // Async cleanup of temp PDF uploads regardless of success/failure
+    await Promise.all(files.map((f) => safeRemove(f.path)));
   }
 });
 
 // 🖼 Enhance Image
 app.post("/enhance-image", imageUpload.single("image"), async (req, res) => {
+  let inputPath;
   try {
     if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
-    const inputPath = req.file.path;
+    inputPath = req.file.path;
     const outputName = `enhanced-${Date.now()}.png`;
     const outputPath = path.join(__dirname, "output/images", outputName);
 
@@ -116,32 +128,55 @@ app.post("/enhance-image", imageUpload.single("image"), async (req, res) => {
       .withMetadata()
       .toFile(outputPath);
 
-    await fs.remove(inputPath);
     res.json({ downloadUrl: `/output/images/${outputName}` });
   } catch (err) {
     console.error("Enhancement error:", err);
     res.status(500).json({ error: "Failed to enhance image" });
+  } finally {
+    if (inputPath) await safeRemove(inputPath);
   }
 });
 
 // 🪄 Remove Background (local version)
 
 app.post("/remove-bg", imageUpload.single("image"), async (req, res) => {
+  let inputPath;
   try {
     if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
-    const inputPath = req.file.path;
+    inputPath = req.file.path;
     const outputName = `no-bg-${Date.now()}.png`;
     const outputPath = path.join(__dirname, "output/images", outputName);
 
     await removeBackgroundAI(inputPath, outputPath);
-    await fs.remove(inputPath);
 
     res.json({ downloadUrl: `/output/images/${outputName}` });
   } catch (err) {
     console.error("❌ Background removal failed:", err);
     res.status(500).json({ error: "Failed to remove background" });
+  } finally {
+    if (inputPath) await safeRemove(inputPath);
   }
+});
+
+// Global error handler (Multer + generic errors)
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+
+  // Multer/file upload errors
+  if (err && err.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({ error: "Uploaded file is too large" });
+  }
+
+  if (err && err.name === "MulterError") {
+    return res.status(400).json({ error: err.message });
+  }
+
+  if (err && err.message && /Only .* files are allowed/i.test(err.message)) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  res.status(500).json({ error: "Internal server error" });
 });
 
 // 🚀 Start Server
