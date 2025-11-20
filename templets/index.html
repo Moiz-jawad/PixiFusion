@@ -399,6 +399,19 @@ footer {
           </div>
         </form>
 
+
+        <!-- Responsive Image Comparison Slider -->
+      <div class="image-comparison-container" id="previewArea" style="display:none;">
+      <div class="comparison-wrapper">
+      <img id="beforeImage" src="" alt="Before" />
+      <div class="after-wrapper">
+      <img id="afterImage" src="" alt="After" />
+      </div>
+      <div class="slider-handle" id="sliderHandle"></div>
+        </div>
+        </div>
+
+
         <!-- Background Remover Section -->
 <section id="bg-remover" class="tool-section bg-light">
   <div class="container">
@@ -454,17 +467,6 @@ footer {
   </div>
 </section>
 
-
-        <!-- Responsive Image Comparison Slider -->
-      <div class="image-comparison-container" id="previewArea" style="display:none;">
-      <div class="comparison-wrapper">
-      <img id="beforeImage" src="" alt="Before" />
-      <div class="after-wrapper">
-      <img id="afterImage" src="" alt="After" />
-      </div>
-      <div class="slider-handle" id="sliderHandle"></div>
-        </div>
-        </div>
 
 
     <!-- Features Section -->
@@ -718,23 +720,31 @@ footer {
       }
 
       // Image Enhancement Form
-        const imageForm = document.getElementById("imageForm");
-        if (imageForm) {
-        const imageInput = document.getElementById("imageInput");
+      const imageForm = document.getElementById("imageForm");
+      const previewArea = document.getElementById("previewArea");
+      const beforeImg = document.getElementById("beforeImage");
+      const afterImg = document.getElementById("afterImage");
+      const sliderHandle = document.getElementById("sliderHandle");
+      const afterWrapper = document.querySelector(".after-wrapper");
+
+      if (imageForm && imageInput && previewArea && beforeImg && afterImg && sliderHandle && afterWrapper) {
         const progress = imageForm.querySelector(".progress");
         const progressBar = imageForm.querySelector(".progress-bar");
 
+        // Local preview before upload
         imageInput.addEventListener("change", (e) => {
           const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              beforeImg.src = event.target.result;
-              afterImg.src = event.target.result;
-              previewArea.style.display = "flex";
-            };
-            reader.readAsDataURL(file);
-          }
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            beforeImg.src = event.target.result;
+            afterImg.src = event.target.result;
+            previewArea.style.display = "flex";
+            afterWrapper.style.width = "50%";
+            sliderHandle.style.left = "50%";
+          };
+          reader.readAsDataURL(file);
         });
 
         imageForm.addEventListener("submit", async (e) => {
@@ -748,8 +758,10 @@ footer {
           const formData = new FormData();
           formData.append("image", imageInput.files[0]);
 
-          progress.style.display = "block";
-          progressBar.style.width = "0%";
+          if (progress && progressBar) {
+            progress.style.display = "block";
+            progressBar.style.width = "0%";
+          }
 
           try {
             const response = await fetch("/enhance-image", {
@@ -760,15 +772,23 @@ footer {
             if (!response.ok) throw new Error("Image enhancement failed");
 
             const data = await response.json();
-            let progressValue = 0;
 
-            // Animate progress bar
-            const interval = setInterval(() => {
-              progressValue += 10;
-              progressBar.style.width = progressValue + "%";
-              if (progressValue >= 100) clearInterval(interval);
-            }, 100);
+            // Smoothly animate progress if the bar exists
+            if (progressBar) {
+              let progressValue = 0;
+              const interval = setInterval(() => {
+                progressValue += 10;
+                progressBar.style.width = progressValue + "%";
+                if (progressValue >= 100) clearInterval(interval);
+              }, 80);
+            }
 
+            // Update the "after" image with the enhanced result
+            afterImg.onload = () => {
+              afterWrapper.style.transition = "width 0.8s ease";
+              afterWrapper.style.width = "70%";
+              sliderHandle.style.left = "70%";
+            };
             afterImg.src = data.downloadUrl;
 
             // Create download link for enhanced image
@@ -790,68 +810,117 @@ footer {
             showAlert("Image enhancement failed.", "danger");
           }
         });
+
+        // Modern, minimal slider logic (mouse + touch)
+        let isDragging = false;
+
+        const updateSlider = (clientX) => {
+          const rect = previewArea.getBoundingClientRect();
+          let x = clientX - rect.left;
+          if (x < 0) x = 0;
+          if (x > rect.width) x = rect.width;
+          const percent = (x / rect.width) * 100;
+          afterWrapper.style.width = percent + "%";
+          sliderHandle.style.left = percent + "%";
+        };
+
+        sliderHandle.addEventListener("mousedown", (e) => {
+          isDragging = true;
+          updateSlider(e.clientX);
+        });
+
+        window.addEventListener("mouseup", () => {
+          isDragging = false;
+        });
+
+        window.addEventListener("mousemove", (e) => {
+          if (!isDragging) return;
+          updateSlider(e.clientX);
+        });
+
+        sliderHandle.addEventListener("touchstart", (e) => {
+          isDragging = true;
+          if (e.touches[0]) updateSlider(e.touches[0].clientX);
+        });
+
+        window.addEventListener("touchend", () => {
+          isDragging = false;
+        });
+
+        window.addEventListener("touchmove", (e) => {
+          if (!isDragging || !e.touches[0]) return;
+          updateSlider(e.touches[0].clientX);
+        });
       }
 
-      const previewArea = document.getElementById("previewArea");
-  const beforeImg = document.getElementById("beforeImage");
-  const afterImg = document.getElementById("afterImage");
-  const sliderHandle = document.getElementById("sliderHandle");
-  const afterWrapper = document.querySelector(".after-wrapper");
+      // Background Remover Form
+      const bgForm = document.getElementById("bgRemoveForm");
+      const bgInput = document.getElementById("bgImageInput");
+      const bgProgress = document.getElementById("bgProgressBar");
+      const bgDownloadContainer = document.getElementById("bgDownloadContainer");
 
-  // Show preview when image is selected
-  function loadPreview(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      beforeImg.src = e.target.result;
-      afterImg.src = e.target.result;
-      previewArea.style.display = "block";
-      afterWrapper.style.width = "50%";
-      sliderHandle.style.left = "50%";
-    };
-    reader.readAsDataURL(file);
-  }
+      if (bgForm && bgInput && bgProgress && bgDownloadContainer && afterImg && previewArea && afterWrapper && sliderHandle) {
+        bgForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
 
-  // Animate enhanced image
-  function revealEnhancedImage(url) {
-    afterImg.onload = () => {
-      afterWrapper.style.transition = "width 1s ease";
-      afterWrapper.style.width = "100%";
-      sliderHandle.style.left = "100%";
-    };
-    afterImg.src = url;
-  }
+          if (!bgInput.files.length) {
+            showAlert("Please select an image to remove background.", "danger");
+            return;
+          }
 
-  // Add touch support for mobile slider
-let isDragging = false;
-sliderHandle.addEventListener("mousedown", () => isDragging = true);
-sliderHandle.addEventListener("touchstart", () => isDragging = true);
+          const formData = new FormData();
+          formData.append("image", bgInput.files[0]);
 
-window.addEventListener("mouseup", () => isDragging = false);
-window.addEventListener("touchend", () => isDragging = false);
+          bgProgress.style.width = "0%";
+          bgProgress.parentElement.style.display = "block";
 
-window.addEventListener("mousemove", (e) => {
-  if (!isDragging) return;
-  const rect = previewArea.getBoundingClientRect();
-  let x = e.clientX - rect.left;
-  if (x < 0) x = 0;
-  if (x > rect.width) x = rect.width;
-  const percent = (x / rect.width) * 100;
-  afterWrapper.style.width = percent + "%";
-  sliderHandle.style.left = percent + "%";
-});
+          try {
+            const response = await fetch("/remove-bg", {
+              method: "POST",
+              body: formData,
+            });
 
-window.addEventListener("touchmove", (e) => {
-  if (!isDragging) return;
-  const touch = e.touches[0];
-  const rect = previewArea.getBoundingClientRect();
-  let x = touch.clientX - rect.left;
-  if (x < 0) x = 0;
-  if (x > rect.width) x = rect.width;
-  const percent = (x / rect.width) * 100;
-  afterWrapper.style.width = percent + "%";
-  sliderHandle.style.left = percent + "%";
-});
+            if (!response.ok) {
+              const text = await response.text();
+              console.error("/remove-bg error", text);
+              throw new Error("Background removal failed");
+            }
 
+            const data = await response.json();
+
+            // Animate progress bar quickly
+            let progressValue = 0;
+            const interval = setInterval(() => {
+              progressValue += 15;
+              bgProgress.style.width = progressValue + "%";
+              if (progressValue >= 100) clearInterval(interval);
+            }, 80);
+
+            // Show result in the same comparison slider
+            previewArea.style.display = "flex";
+            afterImg.onload = () => {
+              afterWrapper.style.transition = "width 0.8s ease";
+              afterWrapper.style.width = "75%";
+              sliderHandle.style.left = "75%";
+            };
+            afterImg.src = data.downloadUrl;
+
+            // Download link for background-removed image
+            bgDownloadContainer.innerHTML = "";
+            const link = document.createElement("a");
+            link.href = data.downloadUrl;
+            link.download = "no-bg-image.png";
+            link.className = "btn btn-danger w-100 mt-3";
+            link.innerHTML = '<i class="bi bi-download"></i> Download No-BG Image';
+            bgDownloadContainer.appendChild(link);
+
+            showAlert("Background removed successfully!", "success");
+          } catch (err) {
+            console.error(err);
+            showAlert("Background removal failed. Please try again.", "danger");
+          }
+        });
+      }
 
       // Alert function
       function showAlert(message, type = "danger") {

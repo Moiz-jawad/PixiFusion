@@ -1,7 +1,9 @@
 import fs from "fs-extra";
+import Replicate from "replicate";
+import { REMBG_MODEL, REMBG_WAIT_OPTIONS } from "./config/replicateConfig.js";
 
 /**
- * Removes background using Replicate API (AI-based)
+ * Removes background using Replicate (AI-based)
  * @param {string} inputPath - Local path of the image to process
  * @param {string} outputPath - Path to save the output image
  */
@@ -12,73 +14,33 @@ export async function removeBackgroundAI(inputPath, outputPath) {
       "Missing REPLICATE_API_TOKEN in environment (.env or process env)."
     );
 
-  const modelVersion =
-    "cc2f8dc142bdf1b99b79f92e5e918c1a5b15f5c54b4b428f2c66b9bfb7c4a4d8";
-
-  console.log("🪄 Removing background with Replicate AI...");
-
-  // Read and encode input image
-  const imageBuffer = await fs.readFile(inputPath);
-  const base64Image = imageBuffer.toString("base64");
-
-  // Create prediction
-  const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
-    method: "POST",
-    headers: {
-      Authorization: `Token ${apiToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      version: modelVersion,
-      input: { image: `data:image/png;base64,${base64Image}` },
-    }),
+  const replicate = new Replicate({
+    auth: apiToken,
   });
 
-  if (!createResponse.ok) {
-    const text = await createResponse.text();
-    throw new Error(
-      `Replicate API error (${createResponse.status}): ${text.substring(0, 300)}`
-    );
+  console.log("🪄 Removing background with Replicate AI...", {
+    model: REMBG_MODEL,
+    inputPath,
+  });
+
+  const start = Date.now();
+
+  // Use the official client to run the rembg model. It will internally handle
+  // prediction creation and polling based on REMBG_WAIT_OPTIONS.
+  const output = await replicate.run(REMBG_MODEL, {
+    input: {
+      // Let the client handle file upload/encoding from a stream.
+      image: fs.createReadStream(inputPath),
+    },
+    wait: REMBG_WAIT_OPTIONS,
+  });
+
+  // The output from replicate.run is typically either a URL string or an array.
+  const outputUrl = Array.isArray(output) ? output[0] : output;
+  if (!outputUrl) {
+    throw new Error("Replicate returned no output URL for background removal");
   }
 
-  const prediction = await createResponse.json();
-  if (prediction.error) throw new Error(prediction.error);
-
-  // Poll until the prediction completes or fails
-  let outputUrl = null;
-  const predictionId = prediction.id;
-
-  while (!outputUrl) {
-    const pollResponse = await fetch(
-      `https://api.replicate.com/v1/predictions/${predictionId}`,
-      {
-        headers: { Authorization: `Token ${apiToken}` },
-      }
-    );
-
-    if (!pollResponse.ok) {
-      const text = await pollResponse.text();
-      throw new Error(
-        `Replicate polling error (${pollResponse.status}): ${text.substring(
-          0,
-          300
-        )}`
-      );
-    }
-
-    const status = await pollResponse.json();
-
-    if (status.output && status.output.length > 0) {
-      outputUrl = status.output[0];
-    } else if (["failed", "canceled"].includes(status.status)) {
-      throw new Error("Prediction failed");
-    } else {
-      // Still running; wait a bit and try again
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-  }
-
-  // Download processed image
   const imgResponse = await fetch(outputUrl);
   if (!imgResponse.ok) {
     const text = await imgResponse.text();
@@ -93,5 +55,6 @@ export async function removeBackgroundAI(inputPath, outputPath) {
   const buffer = await imgResponse.arrayBuffer();
   await fs.writeFile(outputPath, Buffer.from(buffer));
 
-  console.log(`✅ Background removed successfully: ${outputPath}`);
+  const durationMs = Date.now() - start;
+  console.log(`✅ Background removed successfully in ${durationMs}ms: ${outputPath}`);
 }
