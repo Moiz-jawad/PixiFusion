@@ -1,47 +1,63 @@
 import fs from "fs-extra";
-import Replicate from "replicate";
-import { REMBG_MODEL } from "./config/replicateConfig.js";
+import path from "path";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
- * Removes background using Replicate (AI-based)
+ * Removes background using local Python rembg script.
  * @param {string} inputPath - Local path of the image to process
  * @param {string} outputPath - Path to save the output image
  */
 export async function removeBackgroundAI(inputPath, outputPath) {
-  const apiToken = process.env.REPLICATE_API_TOKEN;
-  if (!apiToken)
-    throw new Error(
-      "Missing REPLICATE_API_TOKEN in environment (.env or process env)."
-    );
+  const pythonExecutable = process.env.PYTHON_PATH || "python";
+  const scriptPath = path.join(__dirname, "rembg_runner.py");
 
-  const replicate = new Replicate({
-    auth: apiToken,
-  });
-
-  console.log("🪄 Removing background with Replicate AI...", {
-    model: REMBG_MODEL,
+  console.log("🪄 Removing background locally using rembg...", {
+    pythonExecutable,
+    scriptPath,
     inputPath,
+    outputPath,
   });
 
   const start = Date.now();
 
-  // Use the official client to run the rembg model. The JS client returns a
-  // FileOutput (or array of FileOutputs) which can be written directly.
-  const output = await replicate.run(REMBG_MODEL, {
-    input: {
-      image: fs.createReadStream(inputPath),
-    },
-  });
-
-  if (Array.isArray(output)) {
-    if (!output.length) {
-      throw new Error("Replicate returned an empty output array");
-    }
-    await fs.writeFile(outputPath, output[0]);
-  } else {
-    await fs.writeFile(outputPath, output);
+  // Ensure the input file exists before invoking Python
+  const exists = await fs.pathExists(inputPath);
+  if (!exists) {
+    throw new Error(`Input file does not exist: ${inputPath}`);
   }
 
+  await new Promise((resolve, reject) => {
+    const child = spawn(pythonExecutable, [scriptPath, inputPath, outputPath]);
+
+    let stderr = "";
+
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    child.on("error", (err) => {
+      reject(new Error(`Failed to start Python process: ${err.message}`));
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(
+          new Error(
+            `rembg script exited with code ${code}. STDERR: ${stderr.trim()}`
+          )
+        );
+      }
+    });
+  });
+
   const durationMs = Date.now() - start;
-  console.log(`✅ Background removed successfully in ${durationMs}ms: ${outputPath}`);
+  console.log(
+    `✅ Background removed locally in ${durationMs}ms and saved to: ${outputPath}`
+  );
 }

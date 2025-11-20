@@ -2,7 +2,7 @@
 // Adjust model/version here if you want to switch to a different rembg variant.
 
 export const REMBG_MODEL =
-  "cjwbw/rembg:cc2f8dc142bdf1b99b79f92e5e918c1a5b15f5c54b4b428f2c66b9bfb7c4a4d8";
+  "cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003";
 
 // Polling / timeout behavior for replicate.run
 export const REMBG_WAIT_OPTIONS = {
