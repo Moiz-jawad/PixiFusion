@@ -91,9 +91,7 @@ app.post("/merge", pdfUpload.array("pdfs", 10), async (req, res) => {
     await merger.save(outputPath);
 
     // Async cleanup of temp PDF uploads
-    await Promise.all(
-      req.files.map((f) => fs.remove(f.path).catch(() => {}))
-    );
+    await Promise.all(req.files.map((f) => fs.remove(f.path).catch(() => {})));
 
     res.json({ downloadUrl: `/output/pdfs/${outputName}` });
   } catch (err) {
