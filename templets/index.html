@@ -718,12 +718,9 @@ footer {
       }
 
       // Image Enhancement Form
-      const imageForm = document.getElementById("imageForm");
-      if (imageForm) {
+        const imageForm = document.getElementById("imageForm");
+        if (imageForm) {
         const imageInput = document.getElementById("imageInput");
-        const previewArea = document.getElementById("previewArea");
-        const beforeImg = document.getElementById("beforeImage");
-        const afterImg = document.getElementById("afterImage");
         const progress = imageForm.querySelector(".progress");
         const progressBar = imageForm.querySelector(".progress-bar");
 
@@ -855,23 +852,6 @@ window.addEventListener("touchmove", (e) => {
   sliderHandle.style.left = percent + "%";
 });
 
-
-  // Slider drag functionality
-  let isDrag = false;
-  sliderHandle.addEventListener("mousedown", () => isDrag = true);
-  window.addEventListener("mouseup", () => isDrag = false);
-  window.addEventListener("mousemove", (e) => {
-    if (!isDrag) return;
-    const rect = previewArea.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    if (x < 0) x = 0;
-    if (x > rect.width) x = rect.width;
-    const percent = (x / rect.width) * 100;
-    afterWrapper.style.width = percent + "%";
-    sliderHandle.style.left = percent + "%";
-  });
-
-  
 
       // Alert function
       function showAlert(message, type = "danger") {
