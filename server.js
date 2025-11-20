@@ -17,8 +17,12 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 🔐 Security middleware
-app.use(helmet());
+// 🔐 Security middleware (CSP disabled so CDN scripts/styles work)
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
 
 // ⏱️ Basic rate limiting (per IP)
 const apiLimiter = rateLimit({
